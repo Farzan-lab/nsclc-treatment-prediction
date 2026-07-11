@@ -1,0 +1,32 @@
+# Phase 4 — Cross-modal architecture config
+
+defaults:
+  - base
+
+model:
+  clinical_encoder:
+    hidden_dims: [64, 128, 64]
+    dropout: 0.3
+    norm: "layer"
+
+  genomic_encoder:
+    hidden_dims: [128, 128, 64]
+    dropout: 0.3
+    norm: "batch"
+
+  fusion:
+    embed_dim: 64
+    n_heads: 4
+    dropout: 0.1
+
+  distillation:
+    temperature: 4.0
+    lambda_kd: 0.5     # weight of distillation loss
+
+training:
+  epochs: 100
+  batch_size: 128
+  learning_rate: 0.001
+  weight_decay: 0.0001
+  patience: 15         # early stopping
+  scheduler: "cosine"

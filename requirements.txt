@@ -1,0 +1,45 @@
+# ─── Core ───────────────────────────────────────────────
+numpy==1.26.4
+pandas==2.2.1
+scipy==1.13.0
+
+# ─── Machine Learning ───────────────────────────────────
+scikit-learn==1.4.2
+xgboost==2.0.3
+lightgbm==4.3.0
+
+# ─── Deep Learning ──────────────────────────────────────
+torch==2.3.0
+torchvision==0.18.0
+
+# ─── Survival Analysis ──────────────────────────────────
+lifelines==0.29.0
+scikit-survival==0.22.2
+
+# ─── Explainability ─────────────────────────────────────
+shap==0.45.0
+
+# ─── Visualization ──────────────────────────────────────
+matplotlib==3.8.4
+seaborn==0.13.2
+plotly==5.22.0
+
+# ─── Experiment Tracking ────────────────────────────────
+wandb==0.17.0
+
+# ─── Utilities ──────────────────────────────────────────
+pyyaml==6.0.1
+tqdm==4.66.4
+joblib==1.4.2
+python-dotenv==1.0.1
+
+# ─── Notebooks ──────────────────────────────────────────
+jupyter==1.0.0
+ipykernel==6.29.4
+nbformat==5.10.4
+
+# ─── Code Quality ───────────────────────────────────────
+black==24.4.2
+isort==5.13.2
+flake8==7.0.0
+pytest==8.2.0

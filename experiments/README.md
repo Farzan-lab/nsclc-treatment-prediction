@@ -1,15 +1,15 @@
 # experiments/
 
-## این پوشه چیست؟
+## What is this folder?
 
-محل ذخیره **نتایج تمام آزمایش‌ها و مدل‌های train شده**.
+The storage location for **all experiment results and trained models**.
 
-هر بار که یک مدل را train می‌کنیم، نتایجش در یک زیرپوشه
-با نام منحصربه‌فرد اینجا ذخیره می‌شود.
+Every time a model is trained, its results are saved in a uniquely named
+subfolder inside this directory.
 
 ---
 
-## ساختار نام‌گذاری
+## Naming Convention
 
 ```
 experiments/
@@ -21,23 +21,23 @@ experiments/
 └── ...
 ```
 
-**قرارداد نام‌گذاری:**
+**Naming format:**
 ```
-{شماره}_{نام_مدل}_{پارامتر_کلیدی}/
+{number}_{model_name}_{key_parameter}/
 ```
 
 ---
 
-## محتوای هر پوشه experiment
+## Contents of Each Experiment Folder
 
 ```
 experiments/03_crossmodal_lambda05/
-├── config.yaml          ← کپی دقیق config مورد استفاده
-├── metrics.json         ← نتایج عددی نهایی
-├── training_log.csv     ← loss و metrics در هر epoch
+├── config.yaml          ← Exact copy of the config used for this run
+├── metrics.json         ← Final numerical results
+├── training_log.csv     ← Loss and metrics recorded at every epoch
 ├── checkpoints/
-│   ├── best_model.pt    ← بهترین مدل (بر اساس val loss)
-│   └── last_model.pt    ← آخرین epoch
+│   ├── best_model.pt    ← Best model checkpoint (based on val loss)
+│   └── last_model.pt    ← Checkpoint from the final epoch
 └── predictions/
     ├── val_predictions.csv
     └── test_predictions.csv
@@ -45,7 +45,7 @@ experiments/03_crossmodal_lambda05/
 
 ---
 
-## فایل `metrics.json` — ساختار
+## `metrics.json` — Structure
 
 ```json
 {
@@ -71,7 +71,7 @@ experiments/03_crossmodal_lambda05/
 
 ---
 
-## فایل `training_log.csv` — ساختار
+## `training_log.csv` — Structure
 
 ```
 epoch, train_loss, val_loss, train_f1, val_f1, lr
@@ -81,23 +81,24 @@ epoch, train_loss, val_loss, train_f1, val_f1, lr
 87,    0.4123,    0.4891,   0.761,    0.748,  0.0003
 ```
 
-این فایل برای رسم learning curve در notebook استفاده می‌شود.
+This file is used to plot the learning curve inside the notebooks.
 
 ---
 
-## نکات مهم
+## Important Notes
 
-**checkpoints در `.gitignore` هستند:**
-فایل‌های `.pt` به GitHub push نمی‌شوند چون حجیم هستند.
-فقط `metrics.json` و `config.yaml` push می‌شوند.
+**Checkpoints are listed in `.gitignore`:**
+`.pt` files are not pushed to GitHub due to their large size.
+Only `metrics.json` and `config.yaml` are committed and pushed.
 
-**چرا config را کپی می‌کنیم؟**
-اگر بعداً `configs/cross_modal.yaml` را تغییر دهید،
-همچنان می‌دانید آزمایش ۰۳ با چه تنظیماتی اجرا شده.
+**Why do we copy the config?**
+If `configs/cross_modal.yaml` is modified later, you can still know
+exactly which settings were used for experiment 03.
 
-**چطور بهترین experiment را پیدا کنیم؟**
+**How to find the best experiment:**
+
 ```python
-# notebook مقایسه
+# comparison notebook
 import json, glob
 
 results = []
@@ -105,6 +106,6 @@ for path in glob.glob('experiments/*/metrics.json'):
     with open(path) as f:
         results.append(json.load(f))
 
-# مرتب کردن بر اساس test macro_f1
+# sort by test macro_f1 (descending)
 results.sort(key=lambda x: x['test']['macro_f1'], reverse=True)
 ```

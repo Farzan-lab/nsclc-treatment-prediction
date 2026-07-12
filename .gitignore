@@ -1,0 +1,55 @@
+# ─── Data (هرگز push نشه) ───────────────────────────────
+data/raw/
+data/processed/
+data/splits/
+*.csv
+*.tsv
+*.xlsx
+*.parquet
+
+# ─── Models (حجیم هستند) ────────────────────────────────
+*.pt
+*.pth
+*.pkl
+*.joblib
+experiments/*/checkpoints/
+
+# ─── Python ─────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+dist/
+build/
+*.egg
+.Python
+env/
+venv/
+.venv/
+*.pyc
+
+# ─── Jupyter ────────────────────────────────────────────
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/
+
+# ─── Environment ────────────────────────────────────────
+.env
+.env.local
+*.env
+
+# ─── IDE ────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ─── Logs ───────────────────────────────────────────────
+logs/
+*.log
+wandb/
+mlruns/
+
+# ─── Figures (intermediate) ─────────────────────────────
+figures/temp/

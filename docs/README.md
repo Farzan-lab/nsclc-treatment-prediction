@@ -1,84 +1,85 @@
 # docs/
 
-## این پوشه چیست؟
+## What is this folder?
 
-محل نگهداری **مستندات پروژه** — اطلاعاتی که برای فهمیدن و reproduce
-کردن پروژه لازم است اما داخل کد نمی‌رود.
-
----
-
-## فایل‌های موجود
-
-### `data_dictionary.md` — فرهنگ داده
-
-توضیح دقیق هر ستون dataset:
-- نام ستون
-- نوع داده (numeric / binary / ordinal)
-- توضیح کلینیکی
-- دامنه مقادیر
+The storage location for **project documentation** — information that is necessary
+for understanding and reproducing the project, but does not belong inside the code.
 
 ---
 
-## فایل‌هایی که اضافه می‌شوند
+## Existing Files
 
-### `research_decisions.md` — ثبت تصمیمات تحقیقاتی
+### `data_dictionary.md` — Data Dictionary
 
-هر تصمیم مهم پروژه را با دلیلش ثبت می‌کنیم.
-این برای نوشتن بخش Methods مقاله خیلی مفید است.
+A detailed description of every column in the dataset:
+- Column name
+- Data type (numeric / binary / ordinal)
+- Clinical description
+- Range of values
 
-مثال:
+---
+
+## Files to Be Added
+
+### `research_decisions.md` — Research Decision Log
+
+Every important project decision is recorded here along with its rationale.
+This is extremely useful when writing the Methods section of the paper.
+
+Example:
+
 ```markdown
-## 2025-07-12 — انتخاب 50 ژن برتر
-**تصمیم:** از 50 ژن پرتکرار NSCLC استفاده شود.
-**دلیل:** coverage 93.1% بیماران؛ ژن‌های نادر signal کافی ندارند.
-**آلترناتیو رد شده:** همه ژن‌ها — curse of dimensionality.
+## 2025-07-12 — Selection of Top 50 Genes
+**Decision:** Use the 50 most frequently mutated NSCLC genes.
+**Rationale:** Covers 93.1% of patients; rare genes lack sufficient signal.
+**Rejected alternative:** All genes — leads to curse of dimensionality.
 
-## 2025-07-15 — حذف بیماران با treatment نامشخص
-**تصمیم:** 1,698 بیمار با treatment نامشخص حذف شدند.
-**دلیل:** target variable باید مشخص باشد.
+## 2025-07-15 — Removal of Patients with Unknown Treatment
+**Decision:** 1,698 patients with unspecified treatment were excluded.
+**Rationale:** The target variable must be clearly defined.
 ```
 
 ---
 
-### `experiment_log.md` — لاگ آزمایش‌ها
+### `experiment_log.md` — Experiment Log
 
-خلاصه نتایج هر experiment به زبان ساده:
+A plain-language summary of the results from each experiment:
 
 ```markdown
 ## Exp 03 — Cross-Modal lambda=0.5
-**تاریخ:** 2025-08-10
-**نتیجه:** val macro_f1 = 0.748 (بهتر از baseline 0.721)
-**مشاهده:** attention روی TMB و KRAS تمرکز دارد
-**قدم بعدی:** lambda=1.0 را امتحان کنیم
+**Date:** 2025-08-10
+**Result:** val macro_f1 = 0.748 (better than baseline 0.721)
+**Observation:** Attention focuses on TMB and KRAS
+**Next step:** Try lambda=1.0
 ```
 
 ---
 
-### `paper_outline.md` — طرح مقاله
+### `paper_outline.md` — Paper Outline
 
-ساختار مقاله، claim های اصلی، و figures مورد نیاز.
-با پیشرفت پروژه به‌روزرسانی می‌شود.
+The structure of the paper, its main claims, and the required figures.
+Updated continuously as the project progresses.
 
 ---
 
-### `references.bib` — منابع
+### `references.bib` — References
 
-فایل BibTeX تمام مقالات referenced:
+A BibTeX file containing all referenced papers:
 - MSK-CHORD (Nature 2024)
 - G-HANet (CVPR 2024)
 - MIND (TMLR 2025)
 - DeePaN
-- و سایر کارهای مرتبط
+- And other related works
 
 ---
 
-## چرا این مستندات مهم است؟
+## Why Does This Documentation Matter?
 
-شش ماه دیگر وقتی مقاله می‌نویسید، نمی‌دانید چرا یک تصمیم خاص
-گرفته‌اید. `research_decisions.md` جواب این سوال را دارد.
+Six months from now when you are writing the paper, you will not remember
+why a particular decision was made. `research_decisions.md` has the answer.
 
-Reviewer اگر بخواهد پروژه را reproduce کند، `data_dictionary.md`
-به او می‌گوید هر ستون چیست.
+If a reviewer wants to reproduce the project, `data_dictionary.md`
+tells them what every column means.
 
-Co-author اگر بخواهد به پروژه اضافه شود، `experiment_log.md`
-نشان می‌دهد کجا هستیم.
+If a co-author wants to join the project, `experiment_log.md`
+shows them exactly where things stand.

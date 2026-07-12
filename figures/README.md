@@ -1,71 +1,76 @@
 # figures/
 
-## این پوشه چیست؟
+## What is this folder?
 
-محل ذخیره **تمام نمودارها و تصاویر** پروژه — از EDA تا figures نهایی مقاله.
+The storage location for **all plots and images** in the project — from EDA all the way to the final paper figures.
 
 ---
 
-## ساختار
+## Structure
 
 ```
 figures/
-├── eda/              ← نمودارهای فاز ۲ (EDA)
-├── baseline/         ← نمودارهای فاز ۳
-├── cross_modal/      ← نمودارهای فاز ۴
-├── subgroup/         ← نمودارهای فاز ۵
-├── validation/       ← نمودارهای فاز ۶
-└── paper/            ← figures نهایی برای مقاله (high resolution)
+├── eda/              ← Phase 2 plots (EDA)
+├── baseline/         ← Phase 3 plots
+├── cross_modal/      ← Phase 4 plots
+├── subgroup/         ← Phase 5 plots
+├── validation/       ← Phase 6 plots
+└── paper/            ← Final high-resolution figures for the paper
 ```
 
 ---
 
-## figures مورد انتظار به ترتیب فاز
+## Expected Figures by Phase
 
-### فاز ۲ — EDA
+### Phase 2 — EDA
+
 ```
 figures/eda/
-├── distributions_numeric.png      ← histogram همه feature های عددی
-├── distributions_categorical.png  ← bar chart feature های دسته‌ای
-├── correlation_heatmap.png        ← heatmap همبستگی
-├── treatment_comparison_box.png   ← boxplot هر feature به تفکیک درمان
-├── kaplan_meier_treatment.png     ← KM curve سه گروه درمانی
+├── distributions_numeric.png      ← Histograms for all numeric features
+├── distributions_categorical.png  ← Bar charts for categorical features
+├── correlation_heatmap.png        ← Feature correlation heatmap
+├── treatment_comparison_box.png   ← Boxplots per feature split by treatment group
+├── kaplan_meier_treatment.png     ← Kaplan-Meier curves for the three treatment groups
 └── tmb_distribution_by_treatment.png
 ```
 
-### فاز ۳ — Baseline
+### Phase 3 — Baseline
+
 ```
 figures/baseline/
-├── model_comparison_bar.png       ← مقایسه accuracy/F1/AUC مدل‌ها
-├── confusion_matrix_xgb.png       ← confusion matrix بهترین baseline
-├── shap_clinical_only.png         ← SHAP برای clinical-only model
-├── shap_all_features.png          ← SHAP برای model با همه features
-└── gap_analysis.png               ← نمایش gap بین clinical vs all
+├── model_comparison_bar.png       ← Accuracy / F1 / AUC comparison across models
+├── confusion_matrix_xgb.png       ← Confusion matrix for the best baseline model
+├── shap_clinical_only.png         ← SHAP values for the clinical-only model
+├── shap_all_features.png          ← SHAP values for the model trained on all features
+└── gap_analysis.png               ← Visualization of the gap between clinical-only vs all features
 ```
 
-### فاز ۴ — Cross-Modal
+### Phase 4 — Cross-Modal
+
 ```
 figures/cross_modal/
-├── architecture_diagram.png       ← نمودار معماری (figure 1 مقاله)
-├── training_curves.png            ← learning curves
-├── ablation_results.png           ← مقایسه ablation study
-├── lambda_sensitivity.png         ← تاثیر lambda_kd بر performance
-└── attention_weights.png          ← visualization attention weights
+├── architecture_diagram.png       ← Model architecture diagram (Figure 1 in the paper)
+├── training_curves.png            ← Learning curves
+├── ablation_results.png           ← Ablation study comparison
+├── lambda_sensitivity.png         ← Effect of lambda_kd on model performance
+└── attention_weights.png          ← Attention weight visualization
 ```
 
-### فاز ۵ — Subgroup
+### Phase 5 — Subgroup
+
 ```
 figures/subgroup/
-├── umap_embeddings.png            ← UMAP از learned embeddings
-├── cluster_kaplan_meier.png       ← KM per cluster (figure 2 مقاله)
-├── cluster_heatmap.png            ← feature profile هر cluster
-└── shap_per_cluster.png           ← SHAP به تفکیک subgroup
+├── umap_embeddings.png            ← UMAP projection of learned embeddings
+├── cluster_kaplan_meier.png       ← Kaplan-Meier per cluster (Figure 2 in the paper)
+├── cluster_heatmap.png            ← Feature profile heatmap per cluster
+└── shap_per_cluster.png           ← SHAP values broken down by subgroup
 ```
 
-### paper/ — figures نهایی
+### paper/ — Final Figures
+
 ```
 figures/paper/
-├── fig1_architecture.pdf          ← 300 DPI، vector format
+├── fig1_architecture.pdf          ← 300 DPI, vector format
 ├── fig2_kaplan_meier.pdf
 ├── fig3_results_table.pdf
 ├── fig4_shap_analysis.pdf
@@ -74,31 +79,31 @@ figures/paper/
 
 ---
 
-## استانداردهای figures مقاله
+## Paper Figure Standards
 
-**رزولوشن:** حداقل 300 DPI برای journal submission
+**Resolution:** Minimum 300 DPI for journal submission
 
-**فرمت:** PDF یا TIFF ترجیح داده می‌شود — PNG برای review قابل قبول است
+**Format:** PDF or TIFF is preferred — PNG is acceptable for the review stage
 
-**فونت:** حداقل 8pt در figure نهایی
+**Font size:** Minimum 8pt in the final figure
 
-**رنگ:** رنگ‌ها باید برای colorblind readers هم قابل تشخیص باشند
-از پالت `seaborn colorblind` یا `matplotlib tab10` استفاده کنید
+**Color:** Colors must be distinguishable for colorblind readers.
+Use the `seaborn colorblind` palette or `matplotlib tab10`
 
-**اندازه:** معمولاً single-column (8.5cm) یا double-column (17.4cm)
-بسته به journal
+**Dimensions:** Typically single-column (8.5 cm) or double-column (17.4 cm)
+depending on the target journal
 
 ---
 
-## نحوه ذخیره figure در notebook
+## How to Save a Figure in a Notebook
 
 ```python
 import matplotlib.pyplot as plt
 
 fig, ax = plt.subplots(figsize=(8, 6))
-# ... رسم نمودار ...
+# ... plotting code ...
 
-# ذخیره با کیفیت بالا
+# Save with high quality
 fig.savefig('figures/eda/kaplan_meier_treatment.png',
             dpi=300, bbox_inches='tight', facecolor='white')
 plt.show()

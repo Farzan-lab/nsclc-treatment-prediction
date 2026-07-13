@@ -24,7 +24,7 @@ import numpy as np
 from pathlib import Path
 
 # ── Load ──────────────────────────────────────────────────────────────────────
-DATA_PATH = Path('data/processed/nsclc_final.csv')
+DATA_PATH = Path('C:/Users/farza/Job/Github/nsclc-treatment-prediction/data/Processed Dataset/nsclc_final.csv')
 df = pd.read_csv(DATA_PATH)
 
 original_cols = df.shape[1]

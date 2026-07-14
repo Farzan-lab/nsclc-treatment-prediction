@@ -49,9 +49,9 @@ from xgboost import XGBClassifier
 warnings.filterwarnings('ignore')
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
-SPLITS_DIR  = Path('data/splits/')
-RESULTS_DIR = Path('experiments/02_clinical_only/')
-FIG_DIR     = Path('figures/baseline/')
+SPLITS_DIR  = Path('C:/Users/farza/Job/Github/nsclc-treatment-prediction/data/splits/')
+RESULTS_DIR = Path('C:/Users/farza/Job/Github/nsclc-treatment-prediction/experiments/02_clinical_only/')
+FIG_DIR     = Path('C:/Users/farza/Job/Github/nsclc-treatment-prediction/figures/baseline/')
 RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 FIG_DIR.mkdir(parents=True, exist_ok=True)
 

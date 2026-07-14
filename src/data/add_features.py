@@ -15,7 +15,7 @@ COLUMNS REMOVED FROM PLAN:
 
 RUN THIS ONCE from the project root before starting any EDA notebook:
     cd nsclc-treatment-prediction/
-    python add_features.py
+    python src/data/add_features.py
 ================================================================================
 """
 
@@ -40,22 +40,21 @@ print(f"Loaded: {df.shape[0]:,} patients, {df.shape[1]} columns")
 #     - Prior immunotherapy can cause tolerance (reduced response)
 #     - Treatment-naive patients have more options available
 #
-# ORIGINAL VALUES:
-#   'No prior medications'  → patient arrived without prior cancer treatment
-#   'Prior medications'     → patient received treatment elsewhere before MSK
-#   'Unknown'               → information not available in the record
+# ORIGINAL VALUES (verified from dataset):
+#   'No prior medications'     → patient arrived without prior cancer treatment
+#   'Prior medications to MSK' → patient received treatment elsewhere before MSK
+#   'Unknown'                  → information not available in the record
 #
 # ENCODING DECISION:
-#   'No prior medications' → 0.0   clean slate, no prior treatment
-#   'Prior medications'    → 1.0   has received prior treatment
-#   'Unknown'              → 0.5   uncertainty preserved as a neutral midpoint
+#   'No prior medications'     → 0.0   clean slate, no prior treatment
+#   'Prior medications to MSK' → 1.0   has received prior treatment
+#   'Unknown'                  → 0.5   uncertainty preserved as a neutral midpoint
 #
-# WHY 0.5 FOR UNKNOWN instead of mode imputation?
-#   Mode imputation silently assumes "no prior treatment" for all unknowns.
-#   This would introduce a false clinical assumption for many patients.
-#   Using 0.5 tells the model: "we genuinely do not know" — which is
-#   different from "we know there was no prior treatment."
-#   The model can learn that unknown prior treatment is its own signal.
+# BUG FIX (v2):
+#   Previous version used 'Prior medications' (without 'to MSK') which did not
+#   match the actual string in the dataset. This caused 1,048 patients who truly
+#   had prior medications to be incorrectly assigned 0.5 instead of 1.0.
+#   The correct string is 'Prior medications to MSK'.
 
 print(f"\n{'='*50}")
 print("  STEP 1: PRIOR_MED_TO_MSK → PRIOR_MED_ENC")
@@ -65,30 +64,40 @@ print(f"{'='*50}")
 print(f"\nOriginal distribution:")
 print(df['PRIOR_MED_TO_MSK'].value_counts(dropna=False).to_string())
 
-# Define the mapping from string categories to numeric values
+# Print the exact unique values so we can verify the mapping is correct
+print(f"\nExact unique values in column:")
+for val in df['PRIOR_MED_TO_MSK'].unique():
+    print(f"  '{val}'")
+
+# Define the mapping — both variants included for safety
+# 'Prior medications' is kept as fallback in case the string varies across dataset versions
 prior_med_map = {
-    'No prior medications': 0.0,
-    'Prior medications':    1.0,
-    'Unknown':              0.5,
+    'No prior medications':     0.0,  # confirmed in dataset
+    'Prior medications to MSK': 1.0,  # confirmed in dataset (v2 fix)
+    'Prior medications':        1.0,  # fallback variant
+    'Unknown':                  0.5,  # confirmed in dataset
 }
 
-# .map() replaces each string value with its numeric equivalent
+# .map() replaces each string with its numeric equivalent
 # Any value NOT in the dictionary becomes NaN
 df['PRIOR_MED_ENC'] = df['PRIOR_MED_TO_MSK'].map(prior_med_map)
 
 # Check for any values that didn't match our mapping
 n_unmapped = df['PRIOR_MED_ENC'].isna().sum()
 if n_unmapped > 0:
-    # This would happen if there are unexpected string values in the column
-    # We treat them as Unknown → 0.5
-    df['PRIOR_MED_ENC'] = df['PRIOR_MED_ENC'].fillna(0.5)
     print(f"\n⚠ {n_unmapped} unexpected values found → filled with 0.5 (Unknown)")
+    df['PRIOR_MED_ENC'] = df['PRIOR_MED_ENC'].fillna(0.5)
+else:
+    print(f"\n✓ All values mapped successfully — no unexpected values")
 
 # Verify the result
 print(f"\nEncoded distribution (PRIOR_MED_ENC):")
 print(df['PRIOR_MED_ENC'].value_counts().to_string())
-print(f"\n  Missing values: {df['PRIOR_MED_ENC'].isna().sum()}")
-print(f"✓ PRIOR_MED_ENC created successfully")
+print(f"\n  0.0 = No prior medications : {(df['PRIOR_MED_ENC']==0.0).sum():,} patients")
+print(f"  0.5 = Unknown              : {(df['PRIOR_MED_ENC']==0.5).sum():,} patients")
+print(f"  1.0 = Prior medications    : {(df['PRIOR_MED_ENC']==1.0).sum():,} patients")
+print(f"  Missing                    : {df['PRIOR_MED_ENC'].isna().sum()}")
+print(f"\n✓ PRIOR_MED_ENC created successfully")
 
 
 # ================================================================================
@@ -124,7 +133,6 @@ print(f"Median (non-missing): {msi_median:.4f}")
 # fillna() replaces all NaN values with the specified value
 df['MSI_SCORE'] = df['MSI_SCORE'].fillna(msi_median)
 
-# Verify — should now be 0
 print(f"Missing after imputation: {df['MSI_SCORE'].isna().sum()}")
 print(f"✓ MSI_SCORE imputed with median = {msi_median:.4f}")
 
@@ -143,11 +151,6 @@ print(f"✓ MSI_SCORE imputed with median = {msi_median:.4f}")
 #   We use MODE (most frequent value) because this is a binary column.
 #   Mode imputation for binary columns means: assign the majority class.
 #   For 0.5% missing, this introduces negligible bias.
-#
-#   We do NOT use 0.5 here (unlike PRIOR_MED_ENC) because:
-#     - HAS_PROGRESSION is strictly binary in the original data
-#     - 0.5 would be an out-of-distribution value for this feature
-#     - With only 29 missing, the imputation choice barely matters
 
 print(f"\n{'='*50}")
 print("  STEP 3: IMPUTE — HAS_PROGRESSION")
@@ -156,12 +159,10 @@ print(f"{'='*50}")
 n_missing_prog = df['HAS_PROGRESSION'].isna().sum()
 print(f"\nMissing values: {n_missing_prog} ({n_missing_prog/len(df)*100:.1f}%)")
 
-# Show distribution before imputation
 print(f"\nDistribution before imputation:")
 print(df['HAS_PROGRESSION'].value_counts(dropna=False).to_string())
 
-# .mode() returns a Series — we take [0] to get the single most frequent value
-# For a binary column this will be either 0.0 or 1.0
+# .mode() returns a Series — we take [0] to get the most frequent value
 mode_value = df['HAS_PROGRESSION'].mode()[0]
 print(f"\nMode (most frequent value): {mode_value}")
 
@@ -178,22 +179,20 @@ print(f"✓ HAS_PROGRESSION imputed with mode = {mode_value}")
 #
 # REASON: PDL1_POSITIVE has 3,502 missing values = 57% of all patients.
 #
-# The rule of thumb for missing data:
+# Rule of thumb for missing data:
 #   < 5%   → safe to impute
-#   5–20%  → impute with caution, monitor results
-#   20–40% → investigate pattern, probably drop
-#   > 40%  → drop the column
+#   5–20%  → impute with caution
+#   20–40% → investigate, probably drop
+#   > 40%  → drop
 #
 # With 57% missing, any imputation would be inventing data for the majority
 # of patients. The model would learn from fabricated values, not real ones.
-# Additionally, in real-world inference, PDL1 will often be unavailable —
-# making this feature unreliable even if we could impute it here.
 
 print(f"\n{'='*50}")
 print("  PDL1_POSITIVE — DROPPED (not encoded)")
 print(f"{'='*50}")
 print(f"\n  Missing: 3,502 / 6,110 = 57.3%")
-print(f"  Decision: DROP — above the 40% threshold for reliable imputation")
+print(f"  Decision: DROP — above the 40% threshold")
 print(f"  PDL1_ENC will NOT be added to the dataset")
 
 
@@ -204,20 +203,20 @@ print(f"\n{'='*50}")
 print("  FINAL VERIFICATION")
 print(f"{'='*50}")
 
-# Check all columns we modified or created
 cols_to_check = ['PRIOR_MED_ENC', 'MSI_SCORE', 'HAS_PROGRESSION']
+all_ok = True
 
 for col in cols_to_check:
     n_missing = df[col].isna().sum()
     unique    = sorted(df[col].dropna().unique())
-    # Truncate unique list if too long
-    unique_display = unique if len(unique) <= 6 else unique[:3] + ['...'] + unique[-1:]
+    unique_display = unique if len(unique) <= 6 else unique[:3] + ['...'] + [unique[-1]]
     status = "✓" if n_missing == 0 else "✗"
+    if n_missing > 0:
+        all_ok = False
     print(f"\n  {status} {col}")
     print(f"    missing : {n_missing}")
     print(f"    unique  : {unique_display}")
     print(f"    dtype   : {df[col].dtype}")
-
 
 # ================================================================================
 # STEP 6: Save
@@ -230,10 +229,10 @@ added    = new_cols - original_cols
 print(f"\n{'='*50}")
 print(f"✓ Dataset saved successfully")
 print(f"{'='*50}")
-print(f"  Path         : {DATA_PATH}")
-print(f"  Patients     : {df.shape[0]:,}")
-print(f"  Columns      : {new_cols}  (+{added} new: PRIOR_MED_ENC)")
-print(f"  MSI_SCORE    : 0 missing  (was 177)")
-print(f"  HAS_PROGRESS : 0 missing  (was 29)")
-print(f"  PDL1_POSITIVE: not encoded (57% missing — dropped)")
+print(f"  Path          : {DATA_PATH}")
+print(f"  Patients      : {df.shape[0]:,}")
+print(f"  Columns       : {new_cols}  (+{added} new: PRIOR_MED_ENC)")
+print(f"  MSI_SCORE     : 0 missing  (was 177)")
+print(f"  HAS_PROGRESSION: 0 missing  (was 29)")
+print(f"  PDL1_POSITIVE : not encoded (57% missing — dropped)")
 print(f"\n  Ready for EDA ✓")

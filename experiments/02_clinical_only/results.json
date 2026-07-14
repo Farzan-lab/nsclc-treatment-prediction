@@ -1,0 +1,89 @@
+{
+  "Logistic Regression": {
+    "train": {
+      "accuracy": 0.5826,
+      "macro_f1": 0.5806,
+      "weighted_f1": 0.5821,
+      "f1_immunotherapy": 0.5404,
+      "f1_chemotherapy": 0.6091,
+      "f1_targeted": 0.5922,
+      "auc_ovr": 0.7689
+    },
+    "val": {
+      "accuracy": 0.5736,
+      "macro_f1": 0.5692,
+      "weighted_f1": 0.5735,
+      "f1_immunotherapy": 0.5172,
+      "f1_chemotherapy": 0.617,
+      "f1_targeted": 0.5736,
+      "auc_ovr": 0.7551
+    },
+    "test": {
+      "accuracy": 0.5692,
+      "macro_f1": 0.558,
+      "weighted_f1": 0.5701,
+      "f1_immunotherapy": 0.5241,
+      "f1_chemotherapy": 0.6337,
+      "f1_targeted": 0.5161,
+      "auc_ovr": 0.7502
+    }
+  },
+  "Random Forest": {
+    "train": {
+      "accuracy": 0.7025,
+      "macro_f1": 0.7007,
+      "weighted_f1": 0.7027,
+      "f1_immunotherapy": 0.6859,
+      "f1_chemotherapy": 0.7181,
+      "f1_targeted": 0.6982,
+      "auc_ovr": 0.8735
+    },
+    "val": {
+      "accuracy": 0.5765,
+      "macro_f1": 0.5708,
+      "weighted_f1": 0.5764,
+      "f1_immunotherapy": 0.5192,
+      "f1_chemotherapy": 0.6244,
+      "f1_targeted": 0.5689,
+      "auc_ovr": 0.759
+    },
+    "test": {
+      "accuracy": 0.5649,
+      "macro_f1": 0.5584,
+      "weighted_f1": 0.5659,
+      "f1_immunotherapy": 0.534,
+      "f1_chemotherapy": 0.6072,
+      "f1_targeted": 0.5339,
+      "auc_ovr": 0.7478
+    }
+  },
+  "XGBoost": {
+    "train": {
+      "accuracy": 0.6878,
+      "macro_f1": 0.6767,
+      "weighted_f1": 0.6842,
+      "f1_immunotherapy": 0.6435,
+      "f1_chemotherapy": 0.7297,
+      "f1_targeted": 0.657,
+      "auc_ovr": 0.8633
+    },
+    "val": {
+      "accuracy": 0.5861,
+      "macro_f1": 0.5692,
+      "weighted_f1": 0.5813,
+      "f1_immunotherapy": 0.5136,
+      "f1_chemotherapy": 0.6558,
+      "f1_targeted": 0.5381,
+      "auc_ovr": 0.7664
+    },
+    "test": {
+      "accuracy": 0.566,
+      "macro_f1": 0.5415,
+      "weighted_f1": 0.5593,
+      "f1_immunotherapy": 0.513,
+      "f1_chemotherapy": 0.6413,
+      "f1_targeted": 0.4703,
+      "auc_ovr": 0.7572
+    }
+  }
+}

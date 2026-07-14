@@ -41,7 +41,7 @@ TREATMENT_COLORS = {
     'Targeted':      '#4CAF50',   # green
 }
 
-FIG_PATH = Path('C:/Users/farza/Job/Github/nsclc-treatment-prediction/figures/eda')
+FIG_PATH = Path('../../figures/eda/')
 FIG_PATH.mkdir(parents=True, exist_ok=True)
 
 print("✓ Libraries loaded")
@@ -127,17 +127,28 @@ def plot_feature_distribution(col, df, groups, ax_hist, ax_kde,
     for name, vals in group_values.items():
         if len(vals) < 10:
             continue    # skip if too few values to estimate density
-        # kde=True draws the smooth density curve
-        # fill=True shades the area under the curve (alpha controls transparency)
-        ax_kde.plot([], [], color=TREATMENT_COLORS[name],
-                    linewidth=2, label=f'{name} (n={len(vals):,})')
-        vals.plot.kde(ax=ax_kde, color=TREATMENT_COLORS[name],
-                      linewidth=2, alpha=0.8)
-        ax_kde.fill_between(
-            ax_kde.lines[-1].get_xdata(),
-            ax_kde.lines[-1].get_ydata(),
-            alpha=0.1, color=TREATMENT_COLORS[name]
-        )
+
+        # BUG FIX: Previously we called both ax_kde.plot([], []) AND vals.plot.kde()
+        # which added TWO entries per group to the legend:
+        #   one for the empty plot() line  → showed treatment name correctly
+        #   one for the KDE curve          → showed the column name (unwanted)
+        #
+        # FIX: Use scipy gaussian_kde directly to draw the curve manually.
+        # This gives full control — exactly ONE legend entry per treatment group.
+        from scipy.stats import gaussian_kde
+
+        kde_estimator = gaussian_kde(vals)
+        x_range   = np.linspace(vals.min(), vals.max(), 300)
+        y_density = kde_estimator(x_range)
+
+        # label= adds exactly one legend entry per group
+        ax_kde.plot(x_range, y_density,
+                    color=TREATMENT_COLORS[name], linewidth=2,
+                    label=f'{name} (n={len(vals):,})')
+
+        # shade area under the curve for visual clarity
+        ax_kde.fill_between(x_range, y_density,
+                            alpha=0.1, color=TREATMENT_COLORS[name])
 
     ax_kde.set_xlabel(xlabel, fontsize=9)
     ax_kde.set_ylabel('Density', fontsize=9)

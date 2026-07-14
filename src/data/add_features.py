@@ -4,17 +4,17 @@ Preprocessing — Encode New Features + Impute Missing Values
 ================================================================================
 
 WHAT THIS SCRIPT DOES:
-    Reads nsclc_final.csv, performs three operations, and saves the result:
+    Reads nsclc_final.csv, performs these operations, and saves the result:
 
     1. ENCODE  → PRIOR_MED_TO_MSK → PRIOR_MED_ENC  (3 categories → 0 / 0.5 / 1)
-    2. IMPUTE  → MSI_SCORE         → fill 177 missing values with median
-    3. IMPUTE  → HAS_PROGRESSION   → fill 29 missing values with mode
+    2. IMPUTE  → MSI_SCORE         → fill missing values with median
+    3. IMPUTE  → HAS_PROGRESSION   → fill missing values with mode
+    4. CREATE  → MSI_LOG           → log1p(MSI_NORM) for modeling
 
-COLUMNS REMOVED FROM PLAN:
-    PDL1_POSITIVE → DROPPED (57% missing — too many to be reliable)
+COLUMNS DROPPED:
+    PDL1_POSITIVE → 57% missing — too unreliable to use
 
-RUN THIS ONCE from the project root before starting any EDA notebook:
-    cd nsclc-treatment-prediction/
+RUN ONCE from the project root before starting any EDA notebook:
     python src/data/add_features.py
 ================================================================================
 """
@@ -27,212 +27,176 @@ from pathlib import Path
 DATA_PATH = Path('C:/Users/farza/Job/Github/nsclc-treatment-prediction/data/Processed Dataset/nsclc_final.csv')
 df = pd.read_csv(DATA_PATH)
 
-original_cols = df.shape[1]
+original_cols = len(df.columns)
 print(f"Loaded: {df.shape[0]:,} patients, {df.shape[1]} columns")
 
 # ================================================================================
 # STEP 1: ENCODE — PRIOR_MED_TO_MSK → PRIOR_MED_ENC
 # ================================================================================
-# CLINICAL MEANING:
-#   Did this patient receive cancer treatment BEFORE coming to MSK?
-#   This is important because:
-#     - Prior chemotherapy may cause drug resistance
-#     - Prior immunotherapy can cause tolerance (reduced response)
-#     - Treatment-naive patients have more options available
+# Did this patient receive cancer treatment BEFORE coming to MSK?
 #
 # ORIGINAL VALUES (verified from dataset):
-#   'No prior medications'     → patient arrived without prior cancer treatment
-#   'Prior medications to MSK' → patient received treatment elsewhere before MSK
-#   'Unknown'                  → information not available in the record
+#   'No prior medications'     → no prior cancer treatment
+#   'Prior medications to MSK' → received treatment elsewhere before MSK
+#   'Unknown'                  → information not available
 #
-# ENCODING DECISION:
-#   'No prior medications'     → 0.0   clean slate, no prior treatment
-#   'Prior medications to MSK' → 1.0   has received prior treatment
-#   'Unknown'                  → 0.5   uncertainty preserved as a neutral midpoint
+# ENCODING:
+#   'No prior medications'     → 0.0  (clean slate)
+#   'Prior medications to MSK' → 1.0  (has prior treatment)
+#   'Unknown'                  → 0.5  (uncertainty preserved as neutral midpoint)
 #
-# BUG FIX (v2):
-#   Previous version used 'Prior medications' (without 'to MSK') which did not
-#   match the actual string in the dataset. This caused 1,048 patients who truly
-#   had prior medications to be incorrectly assigned 0.5 instead of 1.0.
-#   The correct string is 'Prior medications to MSK'.
+# WHY 0.5 for Unknown:
+#   Mode imputation would silently assume "no prior treatment."
+#   Using 0.5 tells the model: "we genuinely do not know."
 
 print(f"\n{'='*50}")
 print("  STEP 1: PRIOR_MED_TO_MSK → PRIOR_MED_ENC")
 print(f"{'='*50}")
 
-# Show the original distribution before encoding
 print(f"\nOriginal distribution:")
 print(df['PRIOR_MED_TO_MSK'].value_counts(dropna=False).to_string())
 
-# Print the exact unique values so we can verify the mapping is correct
-print(f"\nExact unique values in column:")
-for val in df['PRIOR_MED_TO_MSK'].unique():
-    print(f"  '{val}'")
-
-# Define the mapping — both variants included for safety
-# 'Prior medications' is kept as fallback in case the string varies across dataset versions
 prior_med_map = {
-    'No prior medications':     0.0,  # confirmed in dataset
-    'Prior medications to MSK': 1.0,  # confirmed in dataset (v2 fix)
-    'Prior medications':        1.0,  # fallback variant
-    'Unknown':                  0.5,  # confirmed in dataset
+    'No prior medications':     0.0,
+    'Prior medications to MSK': 1.0,   # actual string in dataset
+    'Prior medications':        1.0,   # fallback variant
+    'Unknown':                  0.5,
 }
 
-# .map() replaces each string with its numeric equivalent
-# Any value NOT in the dictionary becomes NaN
 df['PRIOR_MED_ENC'] = df['PRIOR_MED_TO_MSK'].map(prior_med_map)
 
-# Check for any values that didn't match our mapping
 n_unmapped = df['PRIOR_MED_ENC'].isna().sum()
 if n_unmapped > 0:
-    print(f"\n⚠ {n_unmapped} unexpected values found → filled with 0.5 (Unknown)")
     df['PRIOR_MED_ENC'] = df['PRIOR_MED_ENC'].fillna(0.5)
+    print(f"\n⚠ {n_unmapped} unexpected values → filled with 0.5")
 else:
-    print(f"\n✓ All values mapped successfully — no unexpected values")
+    print(f"\n✓ All values mapped successfully")
 
-# Verify the result
-print(f"\nEncoded distribution (PRIOR_MED_ENC):")
-print(df['PRIOR_MED_ENC'].value_counts().to_string())
 print(f"\n  0.0 = No prior medications : {(df['PRIOR_MED_ENC']==0.0).sum():,} patients")
 print(f"  0.5 = Unknown              : {(df['PRIOR_MED_ENC']==0.5).sum():,} patients")
 print(f"  1.0 = Prior medications    : {(df['PRIOR_MED_ENC']==1.0).sum():,} patients")
-print(f"  Missing                    : {df['PRIOR_MED_ENC'].isna().sum()}")
-print(f"\n✓ PRIOR_MED_ENC created successfully")
+print(f"✓ PRIOR_MED_ENC created")
 
 
 # ================================================================================
-# STEP 2: IMPUTE — MSI_SCORE (177 missing = 2.9%)
+# STEP 2: IMPUTE — MSI_SCORE (missing values → median)
 # ================================================================================
-# WHAT IS MSI_SCORE?
-#   Microsatellite Instability score measures DNA repair defects in the tumor.
-#   High MSI = the tumor has accumulated many small mutations due to broken
-#   DNA repair machinery. MSI-High tumors often respond well to immunotherapy.
+# MSI (Microsatellite Instability) measures DNA repair defects.
+# High MSI = broken DNA repair → often responds well to immunotherapy.
 #
-# WHY MEDIAN IMPUTATION?
-#   177 missing values = 2.9% of patients — low enough to impute safely.
-#
-#   We use MEDIAN instead of MEAN because:
-#     - MSI scores can have outliers (a few very high values)
-#     - The median is not affected by outliers
-#     - The median represents the "typical" patient better than the mean
-#
-#   We do NOT use 0 because MSI_SCORE = 0 has a specific clinical meaning
-#   (perfect microsatellite stability), which would be a false assumption.
+# WHY MEDIAN:
+#   MSI has extreme outliers — median is more robust than mean.
+#   We do NOT use 0 because MSI=0 has a specific clinical meaning (stable).
 
 print(f"\n{'='*50}")
 print("  STEP 2: IMPUTE — MSI_SCORE")
 print(f"{'='*50}")
 
-n_missing_msi = df['MSI_SCORE'].isna().sum()
-print(f"\nMissing values: {n_missing_msi} ({n_missing_msi/len(df)*100:.1f}%)")
+n_missing = df['MSI_SCORE'].isna().sum()
+print(f"\nMissing values: {n_missing} ({n_missing/len(df)*100:.1f}%)")
 
-# Calculate median on non-missing values only
 msi_median = df['MSI_SCORE'].median()
-print(f"Median (non-missing): {msi_median:.4f}")
-
-# fillna() replaces all NaN values with the specified value
 df['MSI_SCORE'] = df['MSI_SCORE'].fillna(msi_median)
 
-print(f"Missing after imputation: {df['MSI_SCORE'].isna().sum()}")
-print(f"✓ MSI_SCORE imputed with median = {msi_median:.4f}")
+print(f"Imputed with median = {msi_median:.4f}")
+print(f"Missing after: {df['MSI_SCORE'].isna().sum()}")
+print(f"✓ MSI_SCORE imputed")
 
 
 # ================================================================================
-# STEP 3: IMPUTE — HAS_PROGRESSION (29 missing = 0.5%)
+# STEP 3: IMPUTE — HAS_PROGRESSION (missing values → mode)
 # ================================================================================
-# WHAT IS HAS_PROGRESSION?
-#   Binary flag: did this patient have disease progression recorded?
-#   1 = progression was documented (tumor grew or spread despite treatment)
-#   0 = no progression recorded
-#
-# WHY MODE IMPUTATION?
-#   Only 29 patients (0.5%) are missing — extremely small number.
-#
-#   We use MODE (most frequent value) because this is a binary column.
-#   Mode imputation for binary columns means: assign the majority class.
-#   For 0.5% missing, this introduces negligible bias.
+# Binary flag: 1 = disease progression recorded, 0 = no progression.
+# Only 0.5% missing — mode imputation introduces negligible bias.
 
 print(f"\n{'='*50}")
 print("  STEP 3: IMPUTE — HAS_PROGRESSION")
 print(f"{'='*50}")
 
-n_missing_prog = df['HAS_PROGRESSION'].isna().sum()
-print(f"\nMissing values: {n_missing_prog} ({n_missing_prog/len(df)*100:.1f}%)")
+n_missing = df['HAS_PROGRESSION'].isna().sum()
+print(f"\nMissing values: {n_missing} ({n_missing/len(df)*100:.1f}%)")
 
-print(f"\nDistribution before imputation:")
-print(df['HAS_PROGRESSION'].value_counts(dropna=False).to_string())
-
-# .mode() returns a Series — we take [0] to get the most frequent value
 mode_value = df['HAS_PROGRESSION'].mode()[0]
-print(f"\nMode (most frequent value): {mode_value}")
-
 df['HAS_PROGRESSION'] = df['HAS_PROGRESSION'].fillna(mode_value)
 
-print(f"Missing after imputation: {df['HAS_PROGRESSION'].isna().sum()}")
-print(f"✓ HAS_PROGRESSION imputed with mode = {mode_value}")
+print(f"Imputed with mode = {mode_value}")
+print(f"Missing after: {df['HAS_PROGRESSION'].isna().sum()}")
+print(f"✓ HAS_PROGRESSION imputed")
 
 
 # ================================================================================
-# STEP 4: PDL1_POSITIVE — DOCUMENT THE DECISION TO DROP
+# STEP 4: CREATE — MSI_LOG = log1p(MSI_NORM)
 # ================================================================================
-# We are NOT creating PDL1_ENC.
+# From distribution analysis, MSI_NORM is heavily skewed (skew=7.52).
+# A few MSI-High patients have very large values that can dominate the model.
 #
-# REASON: PDL1_POSITIVE has 3,502 missing values = 57% of all patients.
+# Solution: log1p transform compresses the scale without losing signal.
+#   log1p(x) = log(x + 1)
 #
-# Rule of thumb for missing data:
-#   < 5%   → safe to impute
-#   5–20%  → impute with caution
-#   20–40% → investigate, probably drop
-#   > 40%  → drop
+# WHY log1p instead of log:
+#   MSI_NORM has many 0.0 values (stable MSS patients).
+#   log(0) = -infinity → breaks the model.
+#   log1p(0) = log(1) = 0 → safe.
 #
-# With 57% missing, any imputation would be inventing data for the majority
-# of patients. The model would learn from fabricated values, not real ones.
+# This does NOT remove MSI-High patients — it proportionally compresses
+# the scale so high values don't dominate over other features.
 
 print(f"\n{'='*50}")
-print("  PDL1_POSITIVE — DROPPED (not encoded)")
+print("  STEP 4: CREATE MSI_LOG")
 print(f"{'='*50}")
-print(f"\n  Missing: 3,502 / 6,110 = 57.3%")
-print(f"  Decision: DROP — above the 40% threshold")
-print(f"  PDL1_ENC will NOT be added to the dataset")
+
+df['MSI_LOG'] = np.log1p(df['MSI_NORM'])
+
+print(f"\n  MSI_NORM → skewness: {df['MSI_NORM'].skew():.3f}")
+print(f"  MSI_LOG  → skewness: {df['MSI_LOG'].skew():.3f}")
+print(f"  MSI_LOG  → range   : [{df['MSI_LOG'].min():.3f}, {df['MSI_LOG'].max():.3f}]")
+print(f"  MSI_LOG  → missing : {df['MSI_LOG'].isna().sum()}")
+print(f"✓ MSI_LOG created")
 
 
 # ================================================================================
-# STEP 5: Final Verification
+# STEP 5: PDL1_POSITIVE — DROPPED
+# ================================================================================
+# 3,502 missing = 57% of patients → above 40% threshold → not usable.
+
+print(f"\n{'='*50}")
+print("  STEP 5: PDL1_POSITIVE — DROPPED")
+print(f"{'='*50}")
+print(f"\n  Missing: 3,502 / 6,110 = 57.3%  →  threshold is 40%")
+print(f"  PDL1_ENC will NOT be created")
+
+
+# ================================================================================
+# STEP 6: Verification
 # ================================================================================
 print(f"\n{'='*50}")
-print("  FINAL VERIFICATION")
+print("  STEP 6: VERIFICATION")
 print(f"{'='*50}")
 
-cols_to_check = ['PRIOR_MED_ENC', 'MSI_SCORE', 'HAS_PROGRESSION']
-all_ok = True
-
-for col in cols_to_check:
-    n_missing = df[col].isna().sum()
-    unique    = sorted(df[col].dropna().unique())
-    unique_display = unique if len(unique) <= 6 else unique[:3] + ['...'] + [unique[-1]]
-    status = "✓" if n_missing == 0 else "✗"
-    if n_missing > 0:
-        all_ok = False
+check_cols = ['PRIOR_MED_ENC', 'MSI_SCORE', 'HAS_PROGRESSION', 'MSI_LOG']
+for col in check_cols:
+    n_miss   = df[col].isna().sum()
+    status   = "✓" if n_miss == 0 else "✗"
+    unique   = sorted(df[col].dropna().unique())
+    u_str    = str(unique[:4]) + (' ...' if len(unique) > 4 else '')
     print(f"\n  {status} {col}")
-    print(f"    missing : {n_missing}")
-    print(f"    unique  : {unique_display}")
-    print(f"    dtype   : {df[col].dtype}")
+    print(f"    missing: {n_miss}")
+    print(f"    dtype  : {df[col].dtype}")
+    print(f"    unique : {u_str}")
+
 
 # ================================================================================
-# STEP 6: Save
+# STEP 7: Save
 # ================================================================================
 df.to_csv(DATA_PATH, index=False)
 
-new_cols = df.shape[1]
-added    = new_cols - original_cols
-
+added = len(df.columns) - original_cols
 print(f"\n{'='*50}")
-print(f"✓ Dataset saved successfully")
+print(f"✓ Saved")
 print(f"{'='*50}")
-print(f"  Path          : {DATA_PATH}")
-print(f"  Patients      : {df.shape[0]:,}")
-print(f"  Columns       : {new_cols}  (+{added} new: PRIOR_MED_ENC)")
-print(f"  MSI_SCORE     : 0 missing  (was 177)")
-print(f"  HAS_PROGRESSION: 0 missing  (was 29)")
-print(f"  PDL1_POSITIVE : not encoded (57% missing — dropped)")
-print(f"\n  Ready for EDA ✓")
+print(f"  Path    : {DATA_PATH}")
+print(f"  Patients: {df.shape[0]:,}")
+print(f"  Columns : {df.shape[1]}  (+{added} new)")
+print(f"\n  New columns: PRIOR_MED_ENC, MSI_LOG")
+print(f"  Imputed   : MSI_SCORE, HAS_PROGRESSION")
+print(f"\n  Ready for data validation ✓")

@@ -27,7 +27,7 @@ TREATMENT_COLORS = {
     'Targeted':      '#4CAF50',
 }
 
-FIG_PATH = Path('../../figures/eda/')
+FIG_PATH = Path('C:/Users/farza/Job/Github/nsclc-treatment-prediction/figures/eda')
 FIG_PATH.mkdir(parents=True, exist_ok=True)
 
 print("✓ Libraries loaded")

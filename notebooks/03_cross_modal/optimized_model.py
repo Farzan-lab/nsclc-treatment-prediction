@@ -76,8 +76,21 @@ def engineer_features(df):
     if 'TMB_LOG' in df.columns and 'SMOKING_ENC' in df.columns:
         df['TMB_smoking'] = df['TMB_LOG'] * df['SMOKING_ENC']
 
+    # PD-L1 is the clinical biomarker directly used to choose Immuno vs
+    # Chemo — make its interactions with the other immunotherapy signals
+    # explicit instead of leaving the tree to rediscover them.
+    if 'PDL1_ENC' in df.columns and 'TMB_LOG' in df.columns:
+        # PD-L1 positive + high TMB → strong immunotherapy signal
+        df['PDL1_TMB'] = df['PDL1_ENC'] * df['TMB_LOG']
+    if 'PDL1_ENC' in df.columns and 'STK11_KEAP1_co' in df.columns:
+        # PD-L1 negative AND STK11/KEAP1 co-mutated → both point to poor
+        # immunotherapy response → strong Chemo signal
+        df['PDL1_neg_STK11_KEAP1'] = (1 - df['PDL1_ENC']) * df['STK11_KEAP1_co']
+
     # Metastasis burden (total count of metastasis sites)
-    met_cols = [c for c in ['BONE','CNS_BRAIN','LIVER','LUNG','LYMPH_NODES']
+    met_cols = [c for c in ['BONE','CNS_BRAIN','LIVER','LUNG','LYMPH_NODES',
+                             'ADRENAL_GLANDS','INTRA_ABDOMINAL','PLEURA',
+                             'REPRODUCTIVE_ORGANS','OTHER']
                 if c in df.columns]
     if met_cols:
         df['metastasis_burden'] = df[met_cols].sum(axis=1)
@@ -107,6 +120,8 @@ print(f"{'='*70}")
 skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
 
 from itertools import product
+from sklearn.utils.class_weight import compute_sample_weight
+
 param_grid = {
     'max_depth':     [3, 4, 5],
     'learning_rate': [0.02, 0.05],
@@ -115,23 +130,39 @@ param_grid = {
     'reg_lambda':    [1, 3],
 }
 
+def cv_f1_balanced(build_model, X, y, skf):
+    """
+    Manual CV loop (instead of cross_val_score) so we can pass a
+    per-fold 'balanced' sample_weight into XGBoost's fit — XGBClassifier
+    has no class_weight= argument, so without this the majority class
+    (Chemotherapy, 1812/4154 train) quietly dominates, which is exactly
+    the Immuno→Chemo confusion the diagnostic flagged.
+    """
+    fold_scores = []
+    for train_idx, val_idx in skf.split(X, y):
+        X_tr, X_va = X.iloc[train_idx], X.iloc[val_idx]
+        y_tr, y_va = y[train_idx], y[val_idx]
+        sw = compute_sample_weight(class_weight='balanced', y=y_tr)
+        model = build_model()
+        model.fit(X_tr, y_tr, sample_weight=sw)
+        fold_scores.append(mf1(y_va, model.predict(X_va)))
+    return np.mean(fold_scores)
+
 best_f1, best_params = 0, None
 combos = list(product(*param_grid.values()))
 print(f"\n  Searching {len(combos)} combinations...")
 
 for i, (md, lr, ne, mcw, rl) in enumerate(combos):
-    model = XGBClassifier(
+    build = lambda md=md, lr=lr, ne=ne, mcw=mcw, rl=rl: XGBClassifier(
         max_depth=md, learning_rate=lr, n_estimators=ne,
         min_child_weight=mcw, reg_lambda=rl,
         subsample=0.8, colsample_bytree=0.8,
         objective='multi:softprob', num_class=3,
         eval_metric='mlogloss', random_state=42, n_jobs=-1, verbosity=0)
 
-    from sklearn.model_selection import cross_val_score
-    scores = cross_val_score(model, X_tv_eng, y_tv, cv=skf,
-                             scoring='f1_macro', n_jobs=-1)
-    if scores.mean() > best_f1:
-        best_f1 = scores.mean()
+    mean_f1 = cv_f1_balanced(build, X_tv_eng, y_tv, skf)
+    if mean_f1 > best_f1:
+        best_f1 = mean_f1
         best_params = dict(max_depth=md, learning_rate=lr, n_estimators=ne,
                            min_child_weight=mcw, reg_lambda=rl)
         print(f"    [{i+1}/{len(combos)}] New best: {best_f1:.4f}  {best_params}")
@@ -162,22 +193,53 @@ base_models = {
                               random_state=42),
 }
 
+def oof_proba_balanced(build_model, X, y, skf, n_classes=3):
+    """Same manual-CV trick as cv_f1_balanced, but returns OOF probabilities
+    instead of a score — needed so xgb's OOF predictions also benefit from
+    balanced sample_weight (cross_val_predict has no clean way to pass a
+    per-fold sample_weight into fit)."""
+    oof = np.zeros((len(y), n_classes))
+    for train_idx, val_idx in skf.split(X, y):
+        X_tr, X_va = X.iloc[train_idx], X.iloc[val_idx]
+        y_tr = y[train_idx]
+        sw = compute_sample_weight(class_weight='balanced', y=y_tr)
+        model = build_model()
+        model.fit(X_tr, y_tr, sample_weight=sw)
+        oof[val_idx] = model.predict_proba(X_va)
+    return oof
+
 # Get out-of-fold predictions for each model (soft probabilities)
 print(f"\n  Computing cross-validated soft predictions...")
 oof_probs = {}
 test_probs = {}
 
-for name, model in base_models.items():
-    # Out-of-fold probabilities on train+val
-    oof = cross_val_predict(model, X_tv_eng, y_tv, cv=skf,
-                            method='predict_proba', n_jobs=-1)
-    oof_probs[name] = oof
-    oof_f1 = mf1(y_tv, oof.argmax(1))
+xgb_sw_full = compute_sample_weight(class_weight='balanced', y=y_tv)
 
-    # Fit on full train+val, predict test
-    model.fit(X_tv_eng, y_tv)
-    test_probs[name] = model.predict_proba(X_test_eng)
-    test_f1 = mf1(y_test, test_probs[name].argmax(1))
+for name, model in base_models.items():
+    if name == 'xgb':
+        # Balanced sample_weight per fold (see cv_f1_balanced above)
+        oof = oof_proba_balanced(lambda: XGBClassifier(**best_params,
+                                  subsample=0.8, colsample_bytree=0.8,
+                                  objective='multi:softprob', num_class=3,
+                                  eval_metric='mlogloss', random_state=42,
+                                  n_jobs=-1, verbosity=0), X_tv_eng, y_tv, skf)
+        oof_probs[name] = oof
+        oof_f1 = mf1(y_tv, oof.argmax(1))
+
+        model.fit(X_tv_eng, y_tv, sample_weight=xgb_sw_full)
+        test_probs[name] = model.predict_proba(X_test_eng)
+        test_f1 = mf1(y_test, test_probs[name].argmax(1))
+    else:
+        # Out-of-fold probabilities on train+val
+        oof = cross_val_predict(model, X_tv_eng, y_tv, cv=skf,
+                                method='predict_proba', n_jobs=-1)
+        oof_probs[name] = oof
+        oof_f1 = mf1(y_tv, oof.argmax(1))
+
+        # Fit on full train+val, predict test
+        model.fit(X_tv_eng, y_tv)
+        test_probs[name] = model.predict_proba(X_test_eng)
+        test_f1 = mf1(y_test, test_probs[name].argmax(1))
 
     print(f"    {name:<6} OOF F1: {oof_f1:.4f}   Test F1: {test_f1:.4f}")
 
@@ -223,8 +285,8 @@ print(f"\n  {'Method':<40} {'Test Macro F1':>14}")
 print(f"  {'─'*56}")
 print(f"  {'Old baseline (clinical only)':<40} {0.5584:>14.4f}")
 print(f"  {'Old all-features':<40} {0.6555:>14.4f}")
-print(f"  {'Tuned XGBoost + FE':<40} {xgb_test_f1:>14.4f}")
-print(f"  {'Ensemble + FE':<40} {ens_test_f1:>14.4f}")
+print(f"  {'Tuned XGBoost + FE + PDL1 + balanced':<40} {xgb_test_f1:>14.4f}")
+print(f"  {'Ensemble + FE + PDL1 + balanced':<40} {ens_test_f1:>14.4f}")
 
 best_final = max(xgb_test_f1, ens_test_f1)
 print(f"\n  Best: {best_final:.4f}")
@@ -245,6 +307,7 @@ for i, cls in enumerate(CLASS_NAMES):
 
 # Save
 results = {
+    'engineered_features': new_features,
     'best_params': best_params,
     'best_cv_f1': float(best_f1),
     'ensemble_weights': list(best_weights),

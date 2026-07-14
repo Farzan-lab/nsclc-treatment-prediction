@@ -6,13 +6,12 @@ Preprocessing — Encode New Features + Impute Missing Values
 WHAT THIS SCRIPT DOES:
     Reads nsclc_final.csv, performs these operations, and saves the result:
 
-    1. ENCODE  → PRIOR_MED_TO_MSK → PRIOR_MED_ENC  (3 categories → 0 / 0.5 / 1)
+    1. ENCODE  → PRIOR_MED_TO_MSK → PRIOR_MED_ENC     (3 categories → 0 / 0.5 / 1)
     2. IMPUTE  → MSI_SCORE         → fill missing values with median
     3. IMPUTE  → HAS_PROGRESSION   → fill missing values with mode
     4. CREATE  → MSI_LOG           → log1p(MSI_NORM) for modeling
-
-COLUMNS DROPPED:
-    PDL1_POSITIVE → 57% missing — too unreliable to use
+    5. ENCODE  → PDL1_POSITIVE     → PDL1_ENC + PDL1_TESTED (0/0.5/1 + missing flag)
+    6. ENCODE  → HISTORY_OF_PDL1   → HISTORY_PDL1_ENC  (0/0.5/1)
 
 RUN ONCE from the project root before starting any EDA notebook:
     python src/data/add_features.py
@@ -155,15 +154,70 @@ print(f"✓ MSI_LOG created")
 
 
 # ================================================================================
-# STEP 5: PDL1_POSITIVE — DROPPED
+# STEP 5: ENCODE — PDL1_POSITIVE → PDL1_ENC + PDL1_TESTED
 # ================================================================================
-# 3,502 missing = 57% of patients → above 40% threshold → not usable.
+# PD-L1 IHC status is the primary clinical biomarker used to decide
+# immunotherapy eligibility in NSCLC, and it is measured during diagnostic
+# workup — i.e. it is known BEFORE the treatment decision, so using it is
+# not leakage. 57% missing is why it was dropped previously, but the
+# diagnostic crosstab shows real signal on exactly the axis the model
+# struggles with (Immunotherapy vs Chemotherapy):
+#   PDL1 positive → Immunotherapy 56.2% of the time
+#   PDL1 negative → Immunotherapy 43.2% of the time
+#
+# Rather than drop it, encode missingness explicitly (same 0/0.5/1 pattern
+# as PRIOR_MED_ENC) plus a separate "was it tested" indicator, so the model
+# can use the value when known and use "untested" itself as a signal.
 
 print(f"\n{'='*50}")
-print("  STEP 5: PDL1_POSITIVE — DROPPED")
+print("  STEP 5: PDL1_POSITIVE → PDL1_ENC + PDL1_TESTED")
 print(f"{'='*50}")
-print(f"\n  Missing: 3,502 / 6,110 = 57.3%  →  threshold is 40%")
-print(f"  PDL1_ENC will NOT be created")
+
+n_missing = df['PDL1_POSITIVE'].isna().sum()
+print(f"\nMissing values: {n_missing} ({n_missing/len(df)*100:.1f}%)")
+
+pdl1_map = {'Yes': 1.0, 'No': 0.0}
+df['PDL1_ENC'] = df['PDL1_POSITIVE'].map(pdl1_map).fillna(0.5)
+df['PDL1_TESTED'] = df['PDL1_POSITIVE'].notna().astype(float)
+
+print(f"  1.0 = Positive : {(df['PDL1_ENC']==1.0).sum():,} patients")
+print(f"  0.5 = Unknown  : {(df['PDL1_ENC']==0.5).sum():,} patients")
+print(f"  0.0 = Negative : {(df['PDL1_ENC']==0.0).sum():,} patients")
+print(f"✓ PDL1_ENC, PDL1_TESTED created")
+
+# ================================================================================
+# STEP 5b: ENCODE — HISTORY_OF_PDL1 → HISTORY_PDL1_ENC
+# ================================================================================
+# Whether a PD-L1 test was ever ordered for the patient — a weaker but
+# more complete (79% non-missing) proxy for the same clinical intent.
+
+print(f"\n{'='*50}")
+print("  STEP 5b: HISTORY_OF_PDL1 → HISTORY_PDL1_ENC")
+print(f"{'='*50}")
+
+n_missing = df['HISTORY_OF_PDL1'].isna().sum()
+print(f"\nMissing values: {n_missing} ({n_missing/len(df)*100:.1f}%)")
+
+df['HISTORY_PDL1_ENC'] = df['HISTORY_OF_PDL1'].map(pdl1_map).fillna(0.5)
+print(f"✓ HISTORY_PDL1_ENC created")
+
+# ================================================================================
+# STEP 5c: ENCODE — remaining metastasis site flags (Yes/No/Unknown → 1/0/0.5)
+# ================================================================================
+# BONE, CNS_BRAIN, LIVER, LUNG, LYMPH_NODES already arrive as 0/1 floats.
+# These five sites use the same Yes/No/Unknown text as PRIOR_MED_TO_MSK and
+# were left out of the model so far — no reason to keep dropping them.
+
+print(f"\n{'='*50}")
+print("  STEP 5c: Encode remaining metastasis site flags")
+print(f"{'='*50}")
+
+met_site_map = {'Yes': 1.0, 'No': 0.0, 'Unknown': 0.5}
+for col in ['ADRENAL_GLANDS', 'INTRA_ABDOMINAL', 'OTHER', 'PLEURA', 'REPRODUCTIVE_ORGANS']:
+    if df[col].dtype == object:
+        df[col] = df[col].map(met_site_map).fillna(0.5)
+    print(f"  {col:<22} → {sorted(df[col].dropna().unique())}")
+print(f"✓ Metastasis site flags encoded")
 
 
 # ================================================================================
@@ -173,7 +227,9 @@ print(f"\n{'='*50}")
 print("  STEP 6: VERIFICATION")
 print(f"{'='*50}")
 
-check_cols = ['PRIOR_MED_ENC', 'MSI_SCORE', 'HAS_PROGRESSION', 'MSI_LOG']
+check_cols = ['PRIOR_MED_ENC', 'MSI_SCORE', 'HAS_PROGRESSION', 'MSI_LOG',
+              'PDL1_ENC', 'PDL1_TESTED', 'HISTORY_PDL1_ENC',
+              'ADRENAL_GLANDS', 'INTRA_ABDOMINAL', 'OTHER', 'PLEURA', 'REPRODUCTIVE_ORGANS']
 for col in check_cols:
     n_miss   = df[col].isna().sum()
     status   = "✓" if n_miss == 0 else "✗"
@@ -197,6 +253,6 @@ print(f"{'='*50}")
 print(f"  Path    : {DATA_PATH}")
 print(f"  Patients: {df.shape[0]:,}")
 print(f"  Columns : {df.shape[1]}  (+{added} new)")
-print(f"\n  New columns: PRIOR_MED_ENC, MSI_LOG")
+print(f"\n  New columns: PRIOR_MED_ENC, MSI_LOG, PDL1_ENC, PDL1_TESTED, HISTORY_PDL1_ENC")
 print(f"  Imputed   : MSI_SCORE, HAS_PROGRESSION")
 print(f"\n  Ready for data validation ✓")

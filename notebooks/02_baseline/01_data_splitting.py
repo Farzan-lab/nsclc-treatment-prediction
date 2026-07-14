@@ -65,17 +65,28 @@ CLINICAL_FEATURES = [
     'SMOKING_ENC',
     'PRIOR_MED_ENC',
     'HAS_PROGRESSION',
+    # PD-L1 — primary clinical driver of immunotherapy eligibility.
+    # Encoded 0/0.5/1 with an explicit "was it tested" flag instead of
+    # being dropped for missingness (see src/data/add_features.py STEP 5).
+    'PDL1_ENC',
+    'PDL1_TESTED',
+    'HISTORY_PDL1_ENC',
     # Subtype (binary)
     'SUBTYPE_Adenocarcinoma',
     'SUBTYPE_Squamous',
     'SUBTYPE_Neuroendocrine',
     'SUBTYPE_Other_NSCLC',
-    # Metastasis (binary)
+    # Metastasis (binary) — full site list, not just the 5 most common
     'BONE',
     'CNS_BRAIN',
     'LIVER',
     'LUNG',
     'LYMPH_NODES',
+    'ADRENAL_GLANDS',
+    'INTRA_ABDOMINAL',
+    'PLEURA',
+    'REPRODUCTIVE_ORGANS',
+    'OTHER',
     # Demographics
     'GENDER_ENC',
 ]

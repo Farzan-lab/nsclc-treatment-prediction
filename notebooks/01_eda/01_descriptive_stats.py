@@ -54,8 +54,8 @@ print("✓ Libraries loaded")
 # ================================================================================
 
 # '../../' navigates up two folders from notebooks/01_eda/ to project root
-DATA_PATH = Path('../../data/processed/nsclc_final.csv')
-FIG_PATH  = Path('../../figures/eda/')
+DATA_PATH = Path('C:/Users/farza/Job/Github/nsclc-treatment-prediction/data/Processed Dataset/nsclc_final.csv')
+FIG_PATH  = Path('C:/Users/farza/Job/Github/nsclc-treatment-prediction/figures/eda/')
 
 # Create the figures/eda/ folder if it doesn't exist yet
 # parents=True  → also create any missing parent folders

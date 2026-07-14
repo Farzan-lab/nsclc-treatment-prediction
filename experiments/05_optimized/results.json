@@ -1,0 +1,24 @@
+{
+  "best_params": {
+    "max_depth": 3,
+    "learning_rate": 0.02,
+    "n_estimators": 400,
+    "min_child_weight": 1,
+    "reg_lambda": 3
+  },
+  "best_cv_f1": 0.6482862758430603,
+  "ensemble_weights": [
+    1,
+    1,
+    0.5,
+    0.5
+  ],
+  "xgb_test_f1": 0.6412321610601427,
+  "ensemble_test_f1": 0.6525484605038169,
+  "best_final_f1": 0.6525484605038169,
+  "per_class_f1": [
+    0.5582255083179297,
+    0.6797546012269938,
+    0.7196652719665272
+  ]
+}
